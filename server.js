@@ -1,11 +1,18 @@
-const port = process.env.PORT || 3001; // Use the platform-assigned port or default to 3001
-const io = require("socket.io")(port, {
+const express = require("express");
+const http = require("http");
+const { Server } = require("socket.io");
+const cors = require("cors");
+
+const app = express();
+app.use(cors());
+
+const server = http.createServer(app);
+const io = new Server(server, {
   cors: {
-    origin: "*", // Update this with your frontend URL for production
+    origin: "*", // Allow all origins (update this for production)
     methods: ["GET", "POST"],
   },
 });
-console.log(`Server running on port ${port}`);
 
 const peers = {}; // Store peers as { socketId: peerId }
 
@@ -17,16 +24,13 @@ io.on("connection", (socket) => {
     peers[socket.id] = peerId;
     console.log("Registered Peer ID:", peerId);
     console.log("Current Peers:", peers);
-    // Notify all clients of the updated peers list
-    io.emit("peers-list", Object.values(peers));
+    io.emit("peers-list", Object.values(peers)); // Notify all clients of the updated peers list
   });
 
   // Handle call requests
   socket.on("call-peer", (peerId) => {
     console.log(`Call request to Peer ID: ${peerId}`);
-    const targetSocket = Object.keys(peers).find(
-      (key) => peers[key] === peerId
-    );
+    const targetSocket = Object.keys(peers).find((key) => peers[key] === peerId);
     if (targetSocket) {
       io.to(targetSocket).emit("incoming-call", peers[socket.id]); // Notify recipient
     } else {
@@ -39,7 +43,7 @@ io.on("connection", (socket) => {
     const { to, signal } = data;
     const targetSocket = Object.keys(peers).find((key) => peers[key] === to);
     if (targetSocket) {
-      io.to(targetSocket).emit("signal", { from: peers[socket.id], signal }); // Forward signaling data with sender info
+      io.to(targetSocket).emit("signal", { from: peers[socket.id], signal }); // Forward signaling data
     } else {
       console.log("Target peer not found for signaling");
     }
@@ -51,4 +55,9 @@ io.on("connection", (socket) => {
     delete peers[socket.id]; // Remove peer from list
     io.emit("peers-list", Object.values(peers)); // Notify all clients of updated peers list
   });
+});
+
+const PORT = process.env.PORT || 3001;
+server.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
 });
